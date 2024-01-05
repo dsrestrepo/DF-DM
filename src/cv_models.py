@@ -2,14 +2,15 @@ from torchvision import models
 from transformers import ConvNextV2ForImageClassification
 from transformers import ViTModel
 from transformers import CLIPModel
-from segment_anything import SamPredictor, sam_model_registry
 import torch
 import torch.nn as nn
 import subprocess
 import os
+from .RetFound import get_retfound
 
 import warnings
 warnings.filterwarnings("ignore")
+
 
 class CLIPImageEmbeddings(nn.Module):
     """
@@ -92,13 +93,14 @@ class FoundationalCVModel(torch.nn.Module):
     For more information on specific models, refer to the respective model's documentation.
     """
     
-    def __init__(self, backbone, mode='eval'):
+    def __init__(self, backbone, mode='eval', weights=None):
         """
         Initialize the FoundationalCVModel module.
 
         Args:
         - backbone (str): The name of the foundational CV model to load.
         - mode (str, optional): The mode of the model, 'eval' for evaluation or 'fine_tune' for fine-tuning. Default is 'eval'.
+        - if model is retfound, weights is the path to the weights file
         """
         super(FoundationalCVModel, self).__init__()
         
@@ -115,27 +117,6 @@ class FoundationalCVModel(torch.nn.Module):
                 'dinov2_giant': 'dinov2_vitg14',
             }
             self.backbone = torch.hub.load('facebookresearch/dinov2', backbone_path[backbone])
-            
-        elif backbone in ['sam_base', 'sam_large', 'sam_huge']:
-            # Repo: https://github.com/facebookresearch/segment-anything
-            # Paper: https://arxiv.org/abs/2304.02643
-            
-            backbone_path = {
-                'sam_base': 'vit_b',
-                'sam_large': 'vit_l',
-                'sam_huge': 'vit_h',
-            }
-            
-            import urllib.request
-            if backbone == 'sam_huge':
-                self.download_and_rename(url='https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth', filename=f"sam/{backbone_path[backbone]}.pth")
-            elif backbone == 'sam_large':
-                self.download_and_rename(url='https://dl.fbaipublicfiles.com/segment_anything/sam_vit_l_0b3195.pth', filename=f"sam/{backbone_path[backbone]}.pth")
-            elif backbone == 'sam_base':
-                self.download_and_rename(url='https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth', filename=f"sam/{backbone_path[backbone]}.pth")
-            
-            self.backbone = sam_model_registry[backbone_path[backbone]](checkpoint=f"sam/{backbone_path[backbone]}.pth")
-            self.backbone = nn.Sequential(*list(self.backbone.children())[:-2], nn.AdaptiveAvgPool2d(1), nn.Flatten())
 
             
         elif backbone in ['convnextv2_tiny', 'convnextv2_base', 'convnextv2_large']:
@@ -210,8 +191,11 @@ class FoundationalCVModel(torch.nn.Module):
             # Get image part of CLIP model
             self.backbone = CLIPImageEmbeddings(clip_model.vision_model, clip_model.visual_projection)
         
+        elif backbone == 'retfound':
+            self.backbone = get_retfound(weights=weights, backbone=True)
+
         else:
-            raise ValueError(f"Unsupported backbone model: {self.model_name}")
+            raise ValueError(f"Unsupported backbone model: {backbone} \n Supported models: 'dinov2_small', 'dinov2_base', 'dinov2_large', 'dinov2_giant', 'convnextv2_tiny', 'convnextv2_base', 'convnextv2_large', 'convnext_tiny', 'convnext_small', 'convnext_base', 'convnext_large', 'swin_tiny', 'swin_small', 'swin_base', 'vit_base', 'vit_large', 'clip_base', 'clip_large', 'retfound'")
             
         # Set the model to evaluation or fine-tuning mode
         self.mode = mode
@@ -255,7 +239,7 @@ class FoundationalCVModel(torch.nn.Module):
         # Return the features
         return features
     
-    
+
 
 class FoundationalCVModelWithClassifier(torch.nn.Module):
     """
@@ -334,10 +318,10 @@ class FoundationalCVModelWithClassifier(torch.nn.Module):
         # Create a classifier on top of the backbone
         if num_classes > 2:
             self.classifier = nn.Linear(output_dim, num_classes)
-            self.activation_f = nn.Softmax()
+            #self.activation_f = nn.Softmax()
         else:
             self.classifier = nn.Linear(output_dim, 1)
-            self.activation_f = nn.Sigmoid()
+            #self.activation_f = nn.Sigmoid()
             
         # Set the mode
         self.mode = mode
@@ -382,10 +366,10 @@ class FoundationalCVModelWithClassifier(torch.nn.Module):
             features = self.norm(features)
 
         # Apply the classifier to obtain class predictions
-        predictions = self.classifier(features)
+        logits = self.classifier(features)
         
         # Get the probabilities
-        probabilities = self.activation_f(predictions)
+        # probabilities = self.activation_f(logits)
 
-        return probabilities
+        return logits
     
