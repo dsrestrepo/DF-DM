@@ -206,6 +206,10 @@ def load_data(labels_path='data/labels.csv', backbone='dinov2_large', label='dia
         brset_df = pd.read_csv(labels_path)
         if normal:
             brset_df = brset_df[brset_df['DR_ICDR'] == 0]
+
+        brset_df['patient_age'].fillna(brset_df['patient_age'].mean(), inplace=True)
+        # One-hot encode categorical variables:
+        brset_df = pd.get_dummies(brset_df, columns=['camera', 'optic_disc', 'diabetes'])
             
     elif ('messidor' in dataset_name.lower()):
         # Labels
@@ -227,11 +231,6 @@ def load_data(labels_path='data/labels.csv', backbone='dinov2_large', label='dia
 
     # Merge
     df = brset_df.merge(df, on='image_id')
-    
-    if dataset_name == 'BRSET':
-        df['patient_age'].fillna(df['patient_age'].mean(), inplace=True)
-        # One-hot encode categorical variables:
-        df = pd.get_dummies(df, columns=['camera', 'optic_disc', 'diabetes'])
     
     y = df[label]
     X = df.iloc[:, brset_df.shape[1]:]
@@ -259,6 +258,7 @@ def load_data(labels_path='data/labels.csv', backbone='dinov2_large', label='dia
             y = y.apply(lambda x: 0 if x == 2 else 1) 
     
     return X, y
+
 
 
 def split_dataset(X, y, test_size=0.3, random_state=1, plot=True):

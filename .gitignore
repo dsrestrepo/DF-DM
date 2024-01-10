@@ -1,6 +1,6 @@
 # By now .csv files
 *.csv
-!Embeddings/daquar/Embeddings_dinov2_base.csv
+!datasets/BRSET/labels.csv
 *.txt
 *.tsv
 Models/*
