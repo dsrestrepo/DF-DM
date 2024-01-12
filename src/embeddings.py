@@ -82,7 +82,7 @@ def generate_embeddings(batch, batch_number, model):
     return img_names, features
 
 
-def get_embeddings_df(batch_size=32, path="../BRSET/images/", dataset_name='BRSET', backbone="dinov2", directory='Embeddings', transform=None, image_files=None):
+def get_embeddings_df(batch_size=32, path="../BRSET/images/", dataset_name='BRSET', backbone="dinov2", directory='Embeddings', transform=None, image_files=None, save=True):
     """
     Generate image embeddings and save them in a DataFrame.
 
@@ -114,8 +114,8 @@ def get_embeddings_df(batch_size=32, path="../BRSET/images/", dataset_name='BRSE
         dataset = ImageFolderDataset(folder_path=path, shape=shape, transform=transform, image_files=image_files)
         
     # Create a DataLoader to generate embeddings
-    batch_size = batch_size
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    
 
     model = FoundationalCVModel(backbone)
 
@@ -144,18 +144,21 @@ def get_embeddings_df(batch_size=32, path="../BRSET/images/", dataset_name='BRSE
         'Embeddings': all_embeddings
     })
     
+    print(df)
 
     df_aux = pd.DataFrame(df['Embeddings'].tolist())
     df = pd.concat([df['ImageName'], df_aux], axis=1)
+    
+    if save:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    
-    if not os.path.exists(f'{directory}/{dataset_name}'):
-        os.makedirs(f'{directory}/{dataset_name}')
-        
-    df.to_csv(f'{directory}/{dataset_name}/Embeddings_{backbone}.csv', index=False)
-    
+        if not os.path.exists(f'{directory}/{dataset_name}'):
+            os.makedirs(f'{directory}/{dataset_name}')
+
+        df.to_csv(f'{directory}/{dataset_name}/Embeddings_{backbone}.csv', index=False)
+    else:
+        return df
 
 
 def load_data(labels_path='data/labels.csv', backbone='dinov2_large', label='diabetic_retinopathy', directory='Embeddings', dataset_name='BRSET', normal=False, DR_ICDR_3=True, extra_labels=None):

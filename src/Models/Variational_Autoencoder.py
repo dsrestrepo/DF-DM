@@ -18,6 +18,11 @@ warnings.filterwarnings('ignore')
 from tensorflow.python.framework.ops import disable_eager_execution
 disable_eager_execution()
 
+import torch
+import torch.nn as nn
+from torchvision import models
+from transformers import ViTModel
+
 
 """ Constants: """
 # Image size
@@ -198,3 +203,112 @@ def get_Variational_Autoencoder(model_path=None, backbone=None, target_size = (2
         return model
     
     return autoencoder
+
+
+
+class VAEEncoder(nn.Module):
+    def __init__(self, latent_dim=1024, backbone='resnet', input_shape=(3, 224, 224)):
+        super(VAEEncoder, self).__init__()
+
+        self.latent_dim = latent_dim
+
+        if backbone == 'resnet':
+            self.model = models.resnet50(pretrained=True)
+            self.model = nn.Sequential(*list(self.model.children())[:-2])
+            feature_dim = self.model.fc.in_features
+        elif backbone == 'vit':
+            self.model = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k')
+            feature_dim = self.model.config.hidden_size
+
+        # Flatten the feature dimensions for the latent vector
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(feature_dim, latent_dim * 2)
+
+    def forward(self, x):
+        if hasattr(self.model, 'fc'):  # For CNN-based models like ResNet
+            x = self.model(x)
+        else:  # For models like ViT
+            x = self.model(pixel_values=x).last_hidden_state
+            x = torch.mean(x, dim=1)  # Global average pooling equivalent for ViT
+
+        x = self.flatten(x)
+        x = self.fc(x)
+        mean, log_var = torch.chunk(x, 2, dim=-1)
+        return mean, log_var
+
+
+
+class VAEDecoder(nn.Module):
+    def __init__(self, latent_dim=1024, output_shape=(3, 224, 224), dropout_rate=0.2):
+        super(VAEDecoder, self).__init__()
+        self.latent_dim = latent_dim
+
+        self.decoder_input = nn.Linear(latent_dim, 4096)
+
+        self.deconv_blocks = nn.Sequential(
+            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(),
+            nn.Dropout2d(dropout_rate),
+            
+            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(),
+            nn.Dropout2d(dropout_rate),
+            
+            nn.ConvTranspose2d(64, 32, kernel_size=6, stride=2, padding=2),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(),
+            nn.Dropout2d(dropout_rate),
+            
+            nn.ConvTranspose2d(32, output_shape[0], kernel_size=6, stride=2, padding=2),
+            nn.Sigmoid()
+        )
+
+    def forward(self, z):
+        z = self.decoder_input(z)
+        z = z.view(-1, 256, 4, 4)
+        return self.deconv_blocks(z)
+
+
+class VAE(nn.Module):
+    def __init__(self, latent_dim=1024, output_shape=(3, 224, 224), backbone='resnet', dropout_rate=0.2):
+        super(VAE, self).__init__()
+        self.encoder = VAEEncoder(latent_dim, backbone)
+        self.decoder = VAEDecoder(latent_dim, output_shape, dropout_rate)
+
+    def reparameterize(self, mean, log_var):
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mean + eps * std
+
+    def forward(self, x):
+        mean, log_var = self.encoder(x)
+        z = self.reparameterize(mean, log_var)
+        return self.decoder(z), mean, log_var
+
+# vae = VAE(latent_dim=1024, output_shape=(3, 224, 224), backbone='vit', dropout_rate=0.1)
+
+
+def train_vae(model, dataloader, optimizer, epochs, device='cpu'):
+    model.train()  # Set the model to training mode
+
+    for epoch in range(epochs):
+        total_loss = 0
+        for batch_idx, (data, _) in enumerate(dataloader):
+            data = data.to(device)  # Send data to device (CPU or GPU)
+            optimizer.zero_grad()  # Zero out gradients
+
+            # Forward pass
+            recon_batch, mean, log_var = model(data)
+            loss = vae_loss(recon_batch, data, mean, log_var)
+
+            # Backward pass and optimize
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+
+        # Print average loss for the epoch
+        avg_loss = total_loss / len(dataloader.dataset)
+        print(f'Epoch [{epoch+1}/{epochs}], Loss: {avg_loss:.4f}')

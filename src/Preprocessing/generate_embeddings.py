@@ -60,17 +60,22 @@ def generate_embedding(image, model):
 
 """ Image Date from Path """
 def get_image_name(path):
-    image_name = path[path.index('/image')+7:path.index('.tiff')]
+    sub_dir = os.path.basename(os.path.dirname(path))
+    file_name = os.path.basename(path)
+    
+    if sub_dir in file_name:
+        image_name = file_name.replace(sub_dir, '')
+        image_name = image_name.replace('.tiff', '')
+    else:
+        image_name = file_name.replace('image_', '')
+        image_name = image_name.replace('.tiff', '')
+        image_name = image_name.replace('-checkpoint', '')
+        #image_name = path[path.index('/image')+7:path.index('.tiff')]
     return image_name
 
 """ Image Name from Path """
 def get_municipality_name(path):
-    if '_cities/' in path:
-        image_name = path[path.index('_cities/')+8:path.index('/image')]
-    elif 'FULL_COLOMBIA_v2/' in path:
-        image_name = path[path.index('FULL_COLOMBIA_v2/')+17:path.index('/image')]
-    else:
-        image_name = path[path.index('_augmented/')+11:path.index('/image')]
+    image_name = os.path.basename(os.path.dirname(path))
     return image_name
 
 def generate_embeddings_df(image_list, model, crop=True, target_size=(224,224,3), BANDS='RGB', BAND=0):
@@ -82,7 +87,10 @@ def generate_embeddings_df(image_list, model, crop=True, target_size=(224,224,3)
         embedding = generate_embedding(image, model)
         date = get_image_name(path=path)
         name = get_municipality_name(path)
-        embeddings = embeddings.append({'Date': date, 'Embedding': embedding, 'Municipality Code': name}, ignore_index=True )
+        
+        temp_df = pd.DataFrame([{'Date': date, 'Embedding': embedding, 'Municipality Code': name}])
+        embeddings = pd.concat([embeddings, temp_df], ignore_index=True)
+        #embeddings = embeddings.append({'Date': date, 'Embedding': embedding, 'Municipality Code': name}, ignore_index=True )
 
     return embeddings
 
