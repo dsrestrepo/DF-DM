@@ -1,8 +1,5 @@
 # By now .csv files
-*.csv
-!datasets/BRSET/labels.csv
-*.txt
-*.tsv
+Embeddings/*
 Models/*
 Weights/*
 
