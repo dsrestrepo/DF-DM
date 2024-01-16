@@ -6,7 +6,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.layers import Dense, LSTM, GRU, Bidirectional, BatchNormalization, TimeDistributed
 import tensorflow_addons as tfa
 
-from Models.Pretrained_DL_Models import get_backbone
+from .Pretrained_DL_Models import get_backbone
 
 import tensorflow.keras.backend as K
 

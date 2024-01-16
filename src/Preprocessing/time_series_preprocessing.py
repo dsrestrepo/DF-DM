@@ -68,42 +68,9 @@ def get_code(city):
 
 def get_temperature_and_precipitation(city, features):
     
-    if type(city) == int or (type(city) == np.int64):
-        city = cities[city]
-    elif type(city) == str and city.isdigit():
-        city = cities[int(city)]
-    
-    code = get_code(city)
-
-    # Precipitation
-    for col in pd.read_csv(features[0]).columns:
-        if code in col:
-            column = col
-            continue
-    precipitation_df = pd.read_csv(features[0])[['LastDayWeek', column]]
-
-    # Temperature
-    for col in pd.read_csv(features[1]).columns:
-        if code in col:
-            column = col
-            continue
-    temperature_df = pd.read_csv(features[1])[['LastDayWeek', column]]
-
-    # Merge:
-    features_df = temperature_df.merge(precipitation_df, how='inner', on='LastDayWeek')
-
-    features_df['LastDayWeek'] = features_df['LastDayWeek'].apply(epiweek_from_date)
-    
-    dictionary = {}
-    
-    for cols in features_df.columns:
-        if 'temperature' in cols:
-            dictionary[cols] = 'temperature'
-        if 'precipitation' in cols:
-            dictionary[cols] = 'precipitation'
-    features_df.rename(columns=dictionary, inplace=True)
-
-    features_df = features_df.set_index('LastDayWeek')
+    features_df = pd.read_csv(features)[['Municipality code','epiweek','Count','NumMentions','NumSources','NumArticles','AvgTone']]
+    features_df = features_df[features_df['Municipality code'] == city]
+    features_df = features_df.set_index('epiweek')
     features_df.index.name = None
 
     return features_df
@@ -112,6 +79,7 @@ def get_temperature_and_precipitation(city, features):
 
 """ Read the file with Static Data  """
 def read_static(path, Municipality = None):
+    
     df = pd.read_csv(path)
     
     df = df.iloc[:,np.r_[:2, 10:14, 28:53]]
@@ -124,24 +92,10 @@ def read_static(path, Municipality = None):
     
     if 'Municipality code' in df.columns:
         df.rename(columns={'Municipality code':'Municipality Code'}, inplace=True)
-
-    
-    if df['Municipality Code'].dtype == 'int64':
-        if type(Municipality) == str:
-            if Municipality.isdigit():
-                Municipality = int(Municipality)
-            else:
-                Municipality = int(codes[Municipality])
-                
-    if df['Municipality Code'].dtype == 'object':
-        if type(Municipality) == int or (type(Municipality) == np.int64):
-            Municipality = cities[Municipality]
-        elif (type(Municipality) == str) and (Municipality.isdigit()):
-            Municipality = cities[int(Municipality)]
     
     if Municipality:
-        print(f'Obtaining dataframe for the city of {Municipality} - {cities[Municipality]} only...')
-        df = df[df['Municipality Code'] == Municipality]
+        print(f'Obtaining dataframe for the city of {Municipality} only...')
+        df = df[df['Municipality'] == Municipality]
     
     df.Date = df.Date.apply(epiweek_from_date)
     
@@ -197,22 +151,8 @@ def read_features(path, Municipality = None):
     if 'Municipality code' in df.columns:
         df.rename(columns={'Municipality code':'Municipality Code'}, inplace=True)
 
-    
-    if df['Municipality Code'].dtype == 'int64':
-        if type(Municipality) == str:
-            if Municipality.isdigit():
-                Municipality = int(Municipality)
-            else:
-                Municipality = int(codes[Municipality])
-                
-    if df['Municipality Code'].dtype == 'object':
-        if type(Municipality) == int or (type(Municipality) == np.int64):
-            Municipality = cities[Municipality]
-        elif (type(Municipality) == str) and (Municipality.isdigit()):
-            Municipality = cities[int(Municipality)]
-    
     if Municipality:
-        print(f'Obtaining dataframe for the city of {Municipality} - {cities[Municipality]} only...')
+        print(f'Obtaining dataframe for the city of {Municipality} only...')
         df = df[df['Municipality Code'] == Municipality]
         
     df.Date = df.Date.apply(epiweek_from_date)
@@ -249,58 +189,25 @@ def get_epiweek(name):
 
 """ Get labels"""
 def read_labels(path, Municipality = None):
-    df = pd.read_csv(path)
-    if df.shape[1] > 678:
-        df = pd.concat([df[['Municipality code', 'Municipality']], df.iloc[:,-676:]], axis=1)
-        cols = df.iloc[:, 2:].columns
-        new_cols = df.iloc[:, 2:].columns.to_series().apply(get_epiweek)
-        df = df.rename(columns=dict(zip(cols, new_cols))) 
-        
-    if 'Label_CSV_All_Municipality' in path:
-        # Get Columns
-        df = df[['epiweek', 'Municipality code', 'Municipality', 'final_cases_label']]
-        
-        # change epiweek format
-        df.epiweek = df.epiweek.apply(get_epiweek)
-        
-        # Remove duplicates
-        df = df[df.duplicated(['epiweek','Municipality code','Municipality']) == False]
-        
-        # Replace Increase, decrease, stable to numerical:
-        """
-        - Decreased = 0
-        - Stable = 1
-        - Increased = 2 
-        """
-        df.final_cases_label = df.final_cases_label.replace({'Decreased': 0, 'Stable': 1, 'Increased': 2})
-        
-        # Create table
-        df = df.pivot(index=['Municipality code', 'Municipality'], columns='epiweek', values='final_cases_label')
+    df=path
 
-        # Reset Index:
-        df = df.reset_index()
+    df = pd.concat([df[['Municipality']], df.iloc[:, 474:-30]], axis=1)
+    #cols = df.iloc[:, 2:].columns
+    #new_cols = df.iloc[:, 2:].columns.to_series().apply(get_epiweek)
+    #df = df.rename(columns=dict(zip(cols, new_cols)))  
     
     if Municipality:
-        
-        if type(Municipality) == str:
-            if Municipality.isdigit():
-                Municipality = int(Municipality)
-            else:
-                Municipality = int(codes[Municipality])
+        df = df[df['Municipality'] == Municipality]
+        #df.columns = ['Labels']
 
-        df = df[df['Municipality code'] == Municipality]
-        df.drop(columns=['Municipality'], inplace=True)
-        #df.rename(columns={'Municipality': 'Municipality Code'}, inplace=True)
+    df = df.set_index('Municipality')
+    df = df.T
+
+    df.columns.name = None
+    df.index.name = None
     
-        df = df.set_index('Municipality code')
-        df = df.T
-
-        df.columns.name = None
-        df.index.name = None
-        
-        df.columns = ['Labels']
-        
-        df.index = pd.to_numeric(df.index)
+    # convert index to numeric
+    df.index = df.index.astype(int)
     
     return df
 
@@ -404,7 +311,7 @@ def get_dengue_dataset(labels_path, embeddings_path, municipality, temp_prec=Fal
     labels_df = read_labels(path=labels_path, Municipality=municipality)
 
     if limit:
-        labels_df = labels_df[(labels_df.index > 201545) & (labels_df.index < 201901)]
+        labels_df = labels_df[(labels_df.index > 201750) & (labels_df.index < 202301)]
         
     
     """ Test All Possible Combinations: """
