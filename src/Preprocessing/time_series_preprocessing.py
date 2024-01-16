@@ -68,8 +68,14 @@ def get_code(city):
 
 def get_temperature_and_precipitation(city, features):
     
-    features_df = pd.read_csv(features)[['Municipality code','epiweek','Count','NumMentions','NumSources','NumArticles','AvgTone']]
-    features_df = features_df[features_df['Municipality code'] == city]
+    features_df = pd.read_csv(features)[['Municipality code','epiweek','Violencia', 'violencia de genero','Count','NumMentions','NumSources','NumArticles','AvgTone']]
+    if 'Municipality code' in features_df.columns:
+        features_df.rename(columns={'Municipality code':'Municipality Code'}, inplace=True)
+
+    features_df = features_df[features_df['Municipality Code'] == city]
+    
+    features_df.drop(columns=['Municipality Code'], inplace=True)
+    
     features_df = features_df.set_index('epiweek')
     features_df.index.name = None
 
@@ -88,7 +94,7 @@ def read_static(path, Municipality = None):
     df['population'] = df[pop_cols].mean(axis=1)
     df.drop(columns=pop_cols, inplace=True)
     
-    df['Date'] = '2016-02-02'
+    df['Date'] = '2017-12-20'
     
     if 'Municipality code' in df.columns:
         df.rename(columns={'Municipality code':'Municipality Code'}, inplace=True)
@@ -198,7 +204,6 @@ def read_labels(path, Municipality = None):
     
     if Municipality:
         df = df[df['Municipality'] == Municipality]
-        #df.columns = ['Labels']
 
     df = df.set_index('Municipality')
     df = df.T
@@ -208,6 +213,9 @@ def read_labels(path, Municipality = None):
     
     # convert index to numeric
     df.index = df.index.astype(int)
+    if Municipality:
+        df.columns = ['Labels']
+    
     
     return df
 
@@ -306,7 +314,7 @@ def create_df(images_dir, MUNICIPALITY, target_size=(224, 224, 3), return_paths=
     return df
 
 
-def get_dengue_dataset(labels_path, embeddings_path, municipality, temp_prec=False, cases=None, limit=True, static=None, target_size=(224, 224, 3)):
+def get_dataset(labels_path, embeddings_path, municipality, temp_prec=False, cases=None, limit=True, static=None, target_size=(224, 224, 3)):
     
     labels_df = read_labels(path=labels_path, Municipality=municipality)
 
@@ -362,6 +370,7 @@ def get_dengue_dataset(labels_path, embeddings_path, municipality, temp_prec=Fal
     elif not embeddings_path and cases and static and not temp_prec:
         # Cases and static are True
         static = read_static(path=static, Municipality=municipality)
+        print(static)
         labels_df = static.merge(labels_df, how='right', left_index=True, right_index=True)
         labels_df = labels_df.fillna(labels_df.mode().iloc[0])
         # Cases
