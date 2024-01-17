@@ -145,6 +145,9 @@ def create_model(lstm_layers=[120, 240], nn_layers=[60, 1], sequence=3, features
         opt = tf.keras.optimizers.legacy.Adam(lr=0.001)
     else:
         opt = tf.keras.optimizers.Adam(lr=0.001)
+        
+        
+    #opt = tf.keras.optimizers.legacy.Adam(lr=0.001)
     
 
     # Metrics

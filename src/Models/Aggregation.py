@@ -98,7 +98,7 @@ def create_aggregation_model(model, model_2, model_3=None, fusion=None, dense_ac
 
     print(model.summary(), "model1 sum")
 
-    if fusion == 'early' or 'joint':
+    if fusion == 'early' or 'late':
         modelc = Sequential(model.layers[:-1])
         modelc.trainable = False
         model_2c = Sequential(model_2.layers[:-1])
@@ -122,7 +122,6 @@ def create_aggregation_model(model, model_2, model_3=None, fusion=None, dense_ac
     print(fusion_features.shape)
 
 
-
     # Assuming self.fusion_fc is a Keras layer
     x = Dense(256, activation=dense_acivation)(fusion_features)
 
@@ -140,7 +139,10 @@ def create_aggregation_model(model, model_2, model_3=None, fusion=None, dense_ac
 
 
     # Compile the model:
-    opt = keras.optimizers.Adam()
+    if int(tf.__version__.split('.')[1]) >= 11:
+        opt = tf.keras.optimizers.legacy.Adam(lr=0.001)
+    else:
+        opt = tf.keras.optimizers.Adam(lr=0.001)
 
     # Metrics
     metrics = [
@@ -159,7 +161,7 @@ def create_aggregation_model_attention(model, model_2, model_3=None, fusion=None
     D=64
 
 
-    if fusion == 'early' or 'joint':
+    if fusion == 'early' or 'late':
 
         modelc = Sequential(model.layers[:-1])
         modelc.trainable = False
