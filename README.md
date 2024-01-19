@@ -19,10 +19,9 @@ This repository contains two use cases for the DF-DM model. A domestic violence 
 ### The DF-DM Framework
 There are a lot of fields that can benefit from multimodal data fusion, in health case 2 common cases are the Public Health tasks such as domestic violence prediction, and clinical tasks such as diabertic retinopathy diagnosis, where data also obtained from multiple sources and modalities. To solve this kind of problems we propouse a framework that not only combines data, but also provides all the good practices to avoid bias and harm. the Data Fusion for Data Mining (DF-DM) framework is a foundational process model for multimodal data fusion in the artificial intelligence as can be seen in the following figure:
 
-![DF-DM](images/Figure 2.png)
+![DF-DM](https://github.com/dsrestrepo/DF-DM/blob/main/images/Figure%202.png)
 
 This framework leverages state-of-the-art foundational models for vector embedding extraction of high dimensional data. Then uses a multimodal data fusion approach to combine the embeddings. The framework is flexible and can be adapted to other multimodal data fusion tasks.
-
 
 The framework was evaluated in two use cases:
 
@@ -37,11 +36,11 @@ The goal of this use case is to predict the number of domestic violence reports 
 
 Our framewk also provides the code to train and extract embeddings from a variational autoencoder for satellite images embedding extraction:
 
-![VAE](images/Figure 4.png)
+![VAE](https://github.com/dsrestrepo/DF-DM/blob/main/images/Figure%204.png)
 
 All the experiments can be seen in the directory Violence. For the fusion, we used a proposed temporal multimodal data fusion model:
 
-![Fusion](images/Figure 5.png)
+![Fusion](https://github.com/dsrestrepo/DF-DM/blob/main/images/Figure%205.png)
 
 ## Setup
 
@@ -121,7 +120,7 @@ This project uses 2 datasets. You'll find instructions and code about to extract
 
 2. Extract the embeddings: 
 
-![Embedding-Extraction](images/Figure 3.png)
+![Embedding-Extraction](https://github.com/dsrestrepo/DF-DM/blob/main/images/Figure%203.png)
 
 * To extract text embeddings you can use Models with support to Open AI API such as GPT 3.5, GPT-4, or comeds with support to the llama cpp package such as LLAMA 2 7B, LLAMA 2 13B, LLAMA 2 70B, or Mistral 7B 
 
