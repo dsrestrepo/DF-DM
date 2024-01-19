@@ -4,7 +4,6 @@ Models/*
 Weights/*
 
 # Images:
-*.png
 *.jpg
 *.jpeg
 
