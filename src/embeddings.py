@@ -160,6 +160,45 @@ def get_embeddings_df(batch_size=32, path="../BRSET/images/", dataset_name='BRSE
     else:
         return df
 
+    import pandas as pd
+import matplotlib.pyplot as plt
+
+def load_image_text_embeddings(path, label, modality=None):
+    # Read the DataFrame
+    df = pd.read_csv(path)
+    
+    # Select features based on modality
+    text_columns = [column for column in df.columns if 'text_' in column]
+    image_columns = [column for column in df.columns if 'image_' in column]
+    
+    if modality == 'text':
+        features = df[text_columns]
+    elif modality == 'image':
+        features = df[image_columns]
+    else:  # None or any other value
+        features = pd.concat([df[text_columns], df[image_columns]], axis=1)
+    
+    # Labels
+    labels = df[label]
+    
+    # Step 3: Split the DataFrame
+    train_features = features[df['split'] == 'train']
+    train_labels = labels[df['split'] == 'train']
+    test_features = features[df['split'] == 'test']
+    test_labels = labels[df['split'] == 'test']
+    
+    # Plot label distribution for both train and test sets
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    train_labels.value_counts().plot(kind='bar', title='Training Set Label Distribution')
+    plt.subplot(1, 2, 2)
+    test_labels.value_counts().plot(kind='bar', title='Testing Set Label Distribution')
+    plt.tight_layout()
+    plt.show()
+    
+    return train_features, train_labels, test_features, test_labels
+
+
 
 def load_data(labels_path='data/labels.csv', backbone='dinov2_large', label='diabetic_retinopathy', directory='Embeddings', dataset_name='BRSET', normal=False, DR_ICDR_3=True, extra_labels=None):
     """
