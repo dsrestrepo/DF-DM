@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import roc_auc_score
 from sklearn.metrics import roc_curve
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
@@ -273,10 +274,11 @@ class EarlyFusionModel(nn.Module):
     Example:
     model = EarlyFusionModel(text_input_size=512, image_input_size=256, output_size=10, hidden=[128, 64])
     """
-    def __init__(self, text_input_size, image_input_size, output_size, hidden=[128]):
+    def __init__(self, text_input_size, image_input_size, output_size, hidden=[128], p=0.2):
         super(EarlyFusionModel, self).__init__()
         
         output_dim = text_input_size + image_input_size
+        self.p = p
         
         # Initialize layers as an empty list
         layers = []
@@ -285,7 +287,7 @@ class EarlyFusionModel(nn.Module):
         if isinstance(hidden, int):
             layers.append(nn.Linear(output_dim, hidden))
             layers.append(nn.ReLU())
-            layers.append(nn.Dropout(p=0.2))
+            layers.append(nn.Dropout(p=self.p))
 
             output_dim = hidden
             
@@ -294,7 +296,7 @@ class EarlyFusionModel(nn.Module):
             for h in hidden:
                 layers.append(nn.Linear(output_dim, h))
                 layers.append(nn.ReLU())
-                layers.append(nn.Dropout(p=0.2))
+                layers.append(nn.Dropout(p=self.p))
                 layers.append(nn.BatchNorm1d(h))
                 output_dim = h
         
@@ -335,11 +337,13 @@ class LateFusionModel(nn.Module):
     Example:
     model = LateFusionModel(text_input_size=512, image_input_size=256, output_size=10, hidden_images=[64], hidden_text=[64])
     """
-    def __init__(self, text_input_size, image_input_size, output_size, hidden_images=[64], hidden_text=[64]):
+    def __init__(self, text_input_size, image_input_size, output_size, hidden_images=[64], hidden_text=[64], p=0.2):
         super(LateFusionModel, self).__init__()
         
-        self.text_fc, out_text = self._get_layers(text_input_size, hidden_text)
-        self.image_fc, out_images = self._get_layers(image_input_size, hidden_images)
+        self.p = p
+        
+        self.text_fc, out_text = self._get_layers(text_input_size, hidden_text, p=self.p)
+        self.image_fc, out_images = self._get_layers(image_input_size, hidden_images, p=self.p)
         
         #self.text_fc = nn.Linear(text_input_size, hidden_text)
         #self.image_fc = nn.Linear(image_input_size, hidden_images)
@@ -384,7 +388,7 @@ class LateFusionModel(nn.Module):
 
 
 
-def test_model(y_test, y_pred):
+def test_model(y_test, y_pred, V=True):
     """
     Evaluates the model on the training and test data respectively
     1. Predictions on test data
@@ -406,73 +410,74 @@ def test_model(y_test, y_pred):
         y_test = np.argmax(y_test, axis=1)
         y_pred = np.argmax(y_pred, axis=1)
     
-    # Confusion matrix
-    # Create a confusion matrix of the test predictions
-    if plot_matrix:
-        cm = confusion_matrix(y_test, y_pred)
-        # create heatmap
-        # Set the size of the plot
-        fig, ax = plt.subplots(figsize=(15, 15))
-        sns.heatmap(cm, annot=True, cmap='Blues', fmt='g', ax=ax)
-        # Set plot labels
-        plt.xlabel('Predicted')
-        plt.ylabel('True')
-        plt.title('Confusion Matrix')
-        # Display plot
-        plt.show()
-
-    #create ROC curve
-    from sklearn.preprocessing import LabelBinarizer
-    fig, ax = plt.subplots(figsize=(15, 15))
-
-    label_binarizer = LabelBinarizer().fit(y_test)
-    y_onehot_test = label_binarizer.transform(y_test)
-    y_onehot_pred = label_binarizer.transform(y_pred)
-    
-    if (y_onehot_pred.shape[1] < 2):
-        fpr, tpr, _ = roc_curve(y_test,  y_pred)
+    if V:
+        # Confusion matrix
+        # Create a confusion matrix of the test predictions
+        if plot_matrix:
+            cm = confusion_matrix(y_test, y_pred)
+            # create heatmap
+            # Set the size of the plot
+            fig, ax = plt.subplots(figsize=(15, 15))
+            sns.heatmap(cm, annot=True, cmap='Blues', fmt='g', ax=ax)
+            # Set plot labels
+            plt.xlabel('Predicted')
+            plt.ylabel('True')
+            plt.title('Confusion Matrix')
+            # Display plot
+            plt.show()
 
         #create ROC curve
-        #plt.plot(fpr,tpr)
-        RocCurveDisplay.from_predictions(
-                y_test,
-                y_pred,
-                name=f"ROC curve",
-                color='aqua',
-                ax=ax,
-            )
-        plt.plot([0, 1], [0, 1], "k--", label="ROC curve for chance level (AUC = 0.5)")
-        plt.title('ROC Curve')
-        plt.ylabel('True Positive Rate')
-        plt.xlabel('False Positive Rate')
-        plt.show()
-        
-    else:
-        from itertools import cycle
-        colors = cycle(["aqua", "darkorange", "cornflowerblue", "red", "green", "yellow", "purple", "pink", "brown", "black"])
+        from sklearn.preprocessing import LabelBinarizer
+        fig, ax = plt.subplots(figsize=(15, 15))
 
-        for class_id, color in zip(range(len(label_binarizer.classes_)), colors):
+        label_binarizer = LabelBinarizer().fit(y_test)
+        y_onehot_test = label_binarizer.transform(y_test)
+        y_onehot_pred = label_binarizer.transform(y_pred)
+
+        if (y_onehot_pred.shape[1] < 2):
+            fpr, tpr, _ = roc_curve(y_test,  y_pred)
+
+            #create ROC curve
+            #plt.plot(fpr,tpr)
             RocCurveDisplay.from_predictions(
-                y_onehot_test[:, class_id],
-                y_onehot_pred[:, class_id],
-                name=f"ROC curve for {label_binarizer.classes_[class_id]}",
-                color=color,
-                ax=ax,
-            )
+                    y_test,
+                    y_pred,
+                    name=f"ROC curve",
+                    color='aqua',
+                    ax=ax,
+                )
+            plt.plot([0, 1], [0, 1], "k--", label="ROC curve for chance level (AUC = 0.5)")
+            plt.title('ROC Curve')
+            plt.ylabel('True Positive Rate')
+            plt.xlabel('False Positive Rate')
+            plt.show()
 
-        plt.plot([0, 1], [0, 1], "k--", label="ROC curve for chance level (AUC = 0.5)")
-        plt.axis("square")
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.title("Extension of Receiver Operating Characteristic\nto One-vs-Rest multiclass")
-        plt.legend(loc='upper left', bbox_to_anchor=(1, 1), bbox_transform=plt.gcf().transFigure)
-        plt.show()
-        
-    # Classification report
-    # Create a classification report of the test predictions
-    cr = classification_report(y_test, y_pred)
-    # print classification report
-    print(cr)
+        else:
+            from itertools import cycle
+            colors = cycle(["aqua", "darkorange", "cornflowerblue", "red", "green", "yellow", "purple", "pink", "brown", "black"])
+
+            for class_id, color in zip(range(len(label_binarizer.classes_)), colors):
+                RocCurveDisplay.from_predictions(
+                    y_onehot_test[:, class_id],
+                    y_onehot_pred[:, class_id],
+                    name=f"ROC curve for {label_binarizer.classes_[class_id]}",
+                    color=color,
+                    ax=ax,
+                )
+
+            plt.plot([0, 1], [0, 1], "k--", label="ROC curve for chance level (AUC = 0.5)")
+            plt.axis("square")
+            plt.xlabel("False Positive Rate")
+            plt.ylabel("True Positive Rate")
+            plt.title("Extension of Receiver Operating Characteristic\nto One-vs-Rest multiclass")
+            plt.legend(loc='upper left', bbox_to_anchor=(1, 1), bbox_transform=plt.gcf().transFigure)
+            plt.show()
+
+        # Classification report
+        # Create a classification report of the test predictions
+        cr = classification_report(y_test, y_pred)
+        # print classification report
+        print(cr)
 
     accuracy = accuracy_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred, average='weighted')  # Use weighted average for multi-class precision
@@ -484,7 +489,7 @@ def test_model(y_test, y_pred):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
     
-def train_early_fusion(train_loader, test_loader, text_input_size, image_input_size, output_size, num_epochs=5, multilabel=True, report=False, lr=0.001, set_weights=True, adam=False):
+def train_early_fusion(train_loader, test_loader, text_input_size, image_input_size, output_size, num_epochs=5, multilabel=True, report=False, lr=0.001, set_weights=True, adam=False, p=0.0, V=True):
     """
     Train an Early Fusion Model.
 
@@ -503,7 +508,7 @@ def train_early_fusion(train_loader, test_loader, text_input_size, image_input_s
     """
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = EarlyFusionModel(text_input_size=text_input_size, image_input_size=image_input_size, output_size=output_size)
+    model = EarlyFusionModel(text_input_size=text_input_size, image_input_size=image_input_size, output_size=output_size, p=p)
     model = nn.DataParallel(model)
     
     model.to(device)
@@ -545,11 +550,17 @@ def train_early_fusion(train_loader, test_loader, text_input_size, image_input_s
     #    criterion = nn.BCEWithLogitsLoss()
     #else:
     #    criterion = nn.CrossEntropyLoss()
-        
+    
+    best = {
+        'Acc': {'Acc': 0, 'F1': 0, 'Auc': 0, 'Epoch': 0, 'Auc_Per_Class': []},
+        'Macro-F1': {'Acc': 0, 'F1': 0, 'Auc': 0, 'Epoch': 0, 'Auc_Per_Class': []},
+        'AUC': {'Acc': 0, 'F1': 0, 'Auc': 0, 'Epoch': 0, 'Auc_Per_Class': []}  # Add this if prioritizing AUC
+    }
+
 
     train_accuracy_list = []
     test_accuracy_list = []
-    
+    f1_accuracy_list = []
     # Initialize variables to store total training and inference times
     total_training_time = 0
     total_inference_time = 0
@@ -601,17 +612,60 @@ def train_early_fusion(train_loader, test_loader, text_input_size, image_input_s
                 #test_model(y_true, (y_pred > 0.5).astype(int))
                 
             test_accuracy = accuracy_score(y_true, y_pred_one_hot)
+            f1 = f1_score(y_true, y_pred_one_hot, average='macro')
             test_accuracy_list.append(test_accuracy)
+            f1_accuracy_list.append(f1)
+            # Compute AUC for binary or multi-class classification
+            if multilabel or (output_size == 1):
+                if output_size == 1:  # Binary classification case
+                    auc_scores = roc_auc_score(y_true, y_pred, average=None)
+                else:  # Multi-label classification
+                    try:
+                        auc_scores = roc_auc_score(y_true, y_pred, average=None, multi_class='ovr')
+                    except ValueError:
+                        auc_scores = np.nan  # Handling cases where AUC cannot be computed due to class imbalance
+            else:  # Multi-class classification
+                try:
+                    auc_scores = roc_auc_score(y_true, y_pred_one_hot, average=None, multi_class='ovr')
+                except ValueError:
+                    auc_scores = np.nan  # Handling cases where AUC cannot be computed due to class imbalance
+            if output_size == 1:
+                macro_auc = auc_scores
+            else:    
+                macro_auc = np.nanmean(auc_scores)  # Compute macro AUC
 
-            print(f"Epoch {epoch + 1}/{num_epochs} - Test Accuracy: {test_accuracy:.4f}")
+            
+            if V:
+                print(f"Epoch {epoch + 1}/{num_epochs} - Test Accuracy: {test_accuracy:.4f}, macro-f1: {f1:.4f}, macro-AUC: {macro_auc:.4f}")
+            
+            if best['Acc']['Acc'] < test_accuracy:
+                best['Acc']['Acc'] = test_accuracy
+                best['Acc']['F1'] = f1
+                best['Acc']['Epoch'] = epoch + 1
+                best['Acc']['Auc_Per_Class'] = auc_scores
+                best['Acc']['Auc'] = macro_auc
+                
+            if best['Macro-F1']['F1'] < f1: 
+                best['Macro-F1']['Acc'] = test_accuracy
+                best['Macro-F1']['F1'] = f1
+                best['Macro-F1']['Epoch'] = epoch + 1
+                best['Macro-F1']['Auc_Per_Class'] = auc_scores
+                best['Macro-F1']['Auc'] = macro_auc
+                
+            if best['AUC']['Auc'] < macro_auc:
+                best['AUC']['Acc'] = test_accuracy
+                best['AUC']['F1'] = f1
+                best['AUC']['Auc'] = macro_auc
+                best['AUC']['Epoch'] = epoch + 1
+                best['AUC']['Auc_Per_Class'] = auc_scores
             
         # End measuring inference time
         epoch_end_time = time.time()
         epoch_inference_time = epoch_end_time - epoch_start_time
         total_inference_time += epoch_inference_time
-        
-        # Print or log the training and inference times for the current epoch
-        print(f"Epoch {epoch + 1}/{num_epochs} - Training Time: {epoch_training_time:.2f} seconds | Inference Time: {epoch_inference_time:.2f} seconds")
+        if V:
+            # Print or log the training and inference times for the current epoch
+            print(f"Epoch {epoch + 1}/{num_epochs} - Training Time: {epoch_training_time:.2f} seconds | Inference Time: {epoch_inference_time:.2f} seconds")
 
     # Calculate average training time per epoch
     average_training_time_per_epoch = total_training_time / num_epochs
@@ -625,7 +679,7 @@ def train_early_fusion(train_loader, test_loader, text_input_size, image_input_s
     print(f"Total Inference Time per Epoch: {total_inference_time:.2f} seconds")
 
     # Plot the accuracy
-    #plt.plot(range(1, num_epochs + 1), train_accuracy_list, label='Train Accuracy')
+    plt.plot(range(1, num_epochs + 1), f1_accuracy_list, label='Test F1')
     plt.plot(range(1, num_epochs + 1), test_accuracy_list, label='Test Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
@@ -655,11 +709,14 @@ def train_early_fusion(train_loader, test_loader, text_input_size, image_input_s
                 # Convert the predicted class indices to one-hot encoding
                 y_pred_one_hot = np.eye(y_pred.shape[1])[predicted_class_indices]
                 #test_model(y_true, (y_pred > 0.5).astype(int))
-            test_model(y_true, y_pred_one_hot)
+            accuracy, precision, recall, f1 = test_model(y_true, y_pred_one_hot, V)
+            
+            return accuracy, precision, recall, f1, best
+            
             
 
 # Function to train late fusion model (similar changes)
-def train_late_fusion(train_loader, test_loader, text_input_size, image_input_size, output_size, num_epochs=5, multilabel=True, report=False, lr=0.001, set_weights=True):
+def train_late_fusion(train_loader, test_loader, text_input_size, image_input_size, output_size, num_epochs=5, multilabel=True, report=False, lr=0.001, set_weights=True, p=0.0, V=True):
     """
     Train a Late Fusion Model.
 
@@ -677,7 +734,7 @@ def train_late_fusion(train_loader, test_loader, text_input_size, image_input_si
     train_late_fusion(train_loader, test_loader, text_input_size=512, image_input_size=256, output_size=10, num_epochs=5, multilabel=True)
     """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = LateFusionModel(text_input_size=text_input_size, image_input_size=image_input_size, output_size=output_size)
+    model = LateFusionModel(text_input_size=text_input_size, image_input_size=image_input_size, output_size=output_size, p=p)
     model = nn.DataParallel(model)
     
     model.to(device)
@@ -722,10 +779,17 @@ def train_late_fusion(train_loader, test_loader, text_input_size, image_input_si
     #optimizer = optim.Adam(model.parameters(), lr=0.001)
     
     optimizer = optim.AdamW(model.parameters(), lr=lr)
-
+    
+    best = {
+        'Acc': {'Acc': 0, 'F1': 0, 'Auc': 0, 'Epoch': 0, 'Auc_Per_Class': []},
+        'Macro-F1': {'Acc': 0, 'F1': 0, 'Auc': 0, 'Epoch': 0, 'Auc_Per_Class': []},
+        'AUC': {'Acc': 0, 'F1': 0, 'Auc': 0, 'Epoch': 0, 'Auc_Per_Class': []}  # Add this if prioritizing AUC
+    }
+    
     train_accuracy_list = []
     test_accuracy_list = []
-    
+    f1_accuracy_list = []
+
     # Initialize variables to store total training and inference times
     total_training_time = 0
     total_inference_time = 0
@@ -776,9 +840,55 @@ def train_late_fusion(train_loader, test_loader, text_input_size, image_input_si
                 #test_model(y_true, (y_pred > 0.5).astype(int))
                 
             test_accuracy = accuracy_score(y_true, y_pred_one_hot)
+            f1 = f1_score(y_true, y_pred_one_hot, average='macro')
             test_accuracy_list.append(test_accuracy)
+            f1_accuracy_list.append(f1)
+            
+            # Compute AUC for binary or multi-class classification
+            if multilabel or (output_size == 1):
+                if output_size == 1:  # Binary classification case
+                    auc_scores = roc_auc_score(y_true, y_pred, average=None)
+                else:  # Multi-label classification
+                    try:
+                        auc_scores = roc_auc_score(y_true, y_pred, average=None, multi_class='ovr')
+                    except ValueError:
+                        auc_scores = np.nan  # Handling cases where AUC cannot be computed due to class imbalance
+            else:  # Multi-class classification
+                try:
+                    auc_scores = roc_auc_score(y_true, y_pred_one_hot, average=None, multi_class='ovr')
+                except ValueError:
+                    auc_scores = np.nan  # Handling cases where AUC cannot be computed due to class imbalance
+            if output_size == 1:
+                macro_auc = auc_scores
+            else:    
+                macro_auc = np.nanmean(auc_scores)  # Compute macro AUC
 
-            print(f"Epoch {epoch + 1}/{num_epochs} - Test Accuracy: {test_accuracy:.4f}")
+            
+            if V:
+                print(f"Epoch {epoch + 1}/{num_epochs} - Test Accuracy: {test_accuracy:.4f}, macro-f1: {f1:.4f}, macro-AUC: {macro_auc:.4f}")
+            
+            if best['Acc']['Acc'] < test_accuracy:
+                best['Acc']['Acc'] = test_accuracy
+                best['Acc']['F1'] = f1
+                best['Acc']['Epoch'] = epoch + 1
+                best['Acc']['Auc_Per_Class'] = auc_scores
+                best['Acc']['Auc'] = macro_auc
+                
+            if best['Macro-F1']['F1'] < f1: 
+                best['Macro-F1']['Acc'] = test_accuracy
+                best['Macro-F1']['F1'] = f1
+                best['Macro-F1']['Epoch'] = epoch + 1
+                best['Macro-F1']['Auc_Per_Class'] = auc_scores
+                best['Macro-F1']['Auc'] = macro_auc
+                
+            if best['AUC']['Auc'] < macro_auc:
+                best['AUC']['Acc'] = test_accuracy
+                best['AUC']['F1'] = f1
+                best['AUC']['Auc'] = macro_auc
+                best['AUC']['Epoch'] = epoch + 1
+                best['AUC']['Auc_Per_Class'] = auc_scores
+            
+            
         
         # End measuring inference time
         epoch_end_time = time.time()
@@ -786,7 +896,8 @@ def train_late_fusion(train_loader, test_loader, text_input_size, image_input_si
         total_inference_time += epoch_inference_time
         
         # Print or log the training and inference times for the current epoch
-        print(f"Epoch {epoch + 1}/{num_epochs} - Training Time: {epoch_training_time:.2f} seconds | Inference Time: {epoch_inference_time:.2f} seconds")
+        if V:
+            print(f"Epoch {epoch + 1}/{num_epochs} - Training Time: {epoch_training_time:.2f} seconds | Inference Time: {epoch_inference_time:.2f} seconds")
 
     # Calculate average training time per epoch
     average_training_time_per_epoch = total_training_time / num_epochs
@@ -800,7 +911,7 @@ def train_late_fusion(train_loader, test_loader, text_input_size, image_input_si
     print(f"Total Inference Time per Epoch: {total_inference_time:.2f} seconds")
 
     # Plot the accuracy
-    #plt.plot(range(1, num_epochs + 1), train_accuracy_list, label='Train Accuracy')
+    plt.plot(range(1, num_epochs + 1), f1_accuracy_list, label='Test F1')
     plt.plot(range(1, num_epochs + 1), test_accuracy_list, label='Test Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
@@ -831,9 +942,11 @@ def train_late_fusion(train_loader, test_loader, text_input_size, image_input_si
                 # Convert the predicted class indices to one-hot encoding
                 y_pred_one_hot = np.eye(y_pred.shape[1])[predicted_class_indices]
                 #test_model(y_true, (y_pred > 0.5).astype(int))
-            
-            test_model(y_true, y_pred_one_hot)
 
+            accuracy, precision, recall, f1 = test_model(y_true, y_pred_one_hot, V)
+            
+            return accuracy, precision, recall, f1, best
+            
 # Function to evaluate classic ML model
 def evaluate_classic_ml_model(model_name, y_true, y_pred, train_columns):
     """
