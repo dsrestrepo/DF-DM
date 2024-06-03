@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the following metadata."
+title: "DF-DM"
+version: "1.0.0"  # Replace with the actual version if different
+doi: ""  # Add the DOI if available
+url: "https://github.com/dsrestrepo/DF-DM"
+authors:
+  - family-names: "Restrepo"
+    given-names: "David"
+  - family-names: "Wu"
+    given-names: "Chenwei"
+  - family-names: "Lopez"
+    given-names: "Diego M"
+  - family-names: "Celi"
+    given-names: "Leo Anthony"
+date-released: "2024-06-03"  # Replace with the actual release date if different
+repository-code: "https://github.com/dsrestrepo/DF-DM"
